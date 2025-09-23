@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BeagleBone Diagnostics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="/static/diagnostic.js"></script>
+  <script src="/home/debian/ai-addon-module-sciemetric/sources/web/diagnostic-web/templates"></script>
+  <link rel="stylesheet" href="/static/diagnostic.css" />
+  <link rel="stylesheet" href="/static/tailwind.css" />
+</head>
+<body class="bios-bg text-gray-200 min-h-screen">
+  <div class="max-w-6xl mx-auto p-4 md:p-8">
+    <!-- Header -->
+    <div class="flex items-center justify-between border-b border-blue-600/40 pb-4 mb-6">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-md ring-2 ring-blue-500/60 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6 text-blue-300">
+            <path d="M9 3h6v2h2a2 2 0 012 2v2h2v6h-2v2a2 2 0 01-2 2h-2v2H9v-2H7a2 2 0 01-2-2v-2H3V9h2V7a2 2 0 012-2h2V3z"/>
+          </svg>
+        </div>
+        <div>
+          <div class="font-orbitron text-2xl tracking-wider text-blue-300">BEAGLEBONE DIAGNOSTICS</div>
+          <div class="text-xs text-gray-400">Sciemetric Technologies India Pvt Ltd (TASI India)</div>
+        </div>
+      </div>
+      <!-- Lock/Unlock controls -->
+      <div class="flex items-center gap-2">
+        <span id="lockStatus" class="text-xs text-gray-400">{{ 'Unlocked' if is_unlocked else 'Locked' }}</span>
+        <button id="unlockBtn" class="btn px-3 py-1.5 rounded-lg">{{ 'Lock' if is_unlocked else 'Unlock to Edit' }}</button>
+      </div>
+    </div>
+    <!-- Navigation Tabs -->
+    <div class="flex space-x-4 mb-4 border-b border-gray-700">
+      <button id="tab-system" class="px-4 py-2 border-b-2 border-blue-500 font-orbitron text-sm">System Information</button>
+      <button onclick="window.location.href='http://localhost:5001'" id="tab-remote" class="px-4 py-2 border-b-2 border-transparent hover:border-gray-500 font-orbitron text-sm">Graphical Analysis</button>
+    </div>
+
+    <div id="content-system">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- LEFT -->
+        <div class="space-y-6 flex flex-col">
+          <!-- General -->
+          <section class="panel">
+            <header class="panel-h"><span>General</span></header>
+            <div class="panel-b">
+              <!-- Top row: Hostname left, IP right -->
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="lbl">Hostname</label>
+                  <input class="inp" id="hostname_display" value="{{ defaults.hostname }}" disabled />
+                </div>
+                <div class="text-right">
+                  <label class="lbl block">Current IP (eth0)</label>
+                  <input class="inp text-right" value="{{ current_ip if current_ip else defaults.ip }}" disabled />
+                </div>
+              </div>
+	    
+	          <!-- Bottom row: Connectivity • Date • Time -->
+		  <div class="mt-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+		    <!-- Connectivity (left) -->
+		    <div class="flex items-center gap-2">
+		      <span class="lbl !mb-0">Connectivity</span>
+		      <span id="genNetDot" class="dot red"></span>
+		      <span id="genNetTxt" class="text-sm text-slate-300">Offline</span>
+		    </div>
+
+		    <!-- Date (center on small, right on wide) -->
+		    <div class="flex items-center gap-2">
+		      <span class="lbl !mb-0">Date</span>
+		      <span id="genDate" class="date-time-val">—</span>
+		    </div>
+
+		    <!-- Time (right) -->
+		    <div class="flex items-center gap-2">
+		      <span class="lbl !mb-0">Time</span>
+		      <span id="genTime" class="date-time-val">—</span>
+		    </div>
+		  </div>
+	    
+            </div>
+          </section>
+
+          <!-- CPU Utilization -->
+          <section class="panel">
+            <header class="panel-h"><span>CPU Utilization</span></header>
+            <div class="panel-b">
+              <div class="cpu-grid">
+                <!-- Bar -->
+                <div class="cpu-vert">
+                  <div id="cpuBar" class="cpu-bar"></div>
+                  <div id="cpuPct" class="cpu-pct">0%</div>
+                </div>
+
+                <!-- Legend -->
+                <div class="cpu-legend">
+                  <div class="legend-line"><span class="swatch green"></span><span>0–35%</span></div>
+                  <div class="legend-line"><span class="swatch yellow"></span><span>36–50%</span></div>
+                  <div class="legend-line"><span class="swatch orange"></span><span>51–75%</span></div>
+                  <div class="legend-line"><span class="swatch red"></span><span>76–100%</span></div>
+                </div>
+
+                <!-- Right: Frequency top; meta bottom -->
+                <div class="cpu-side">
+                  <div class="cpu-freq-block">
+                    <div class="cpu-freq-label">Frequency</div>
+                    <div id="cpuFreq" class="cpu-freq">— MHz</div>
+                  </div>
+		  <div class="cpu-meta-list">
+		    <div><span class="lbl">Load</span> <span class="val val-acc" id="cpuLoad">— / — / —</span></div>
+		    <div id="rowTemp"><span class="lbl">Temp</span> <span class="val val-acc" id="cpuTemp">—</span></div>
+		    <div><span class="lbl">Governor</span> <span class="val val-acc" id="cpuGov">—</span></div>
+		    <div><span class="lbl">Min/Max</span> <span class="val val-acc" id="cpuBounds">—</span></div>
+		    <div><span class="lbl">Uptime</span> <span class="val val-acc" id="cpuUptime">—</span></div>
+		  </div>              
+	        </div>
+              </div>
+            </div>
+          </section>
+	  <!-- Database Log -->
+	  <section class="panel mt-auto">
+	    <header class="panel-h"><span>Database Log</span></header>
+	    <div class="panel-b">
+	      <div class="mt-1 flex items-center justify-between gap-3">
+	        <button id="viewLogBtn" class="btn px-3 py-1.5 rounded-lg">View DB Log</button>
+	        <span class="text-xs text-gray-400">Recent database read/write operations</span>
+	      </div>
+	      <pre id="dbLog"
+	           class="db-log mt-2"
+	           style="max-height: 120px; overflow:auto; white-space:pre-wrap; border:1px solid rgba(34,211,238,0.25); border-radius:8px; padding:8px; background:rgba(2,6,23,0.6);">
+	      </pre>
+	    </div>
+	  </section>
+        </div>
+
+        <!-- RIGHT -->
+        <div class="space-y-6">
+          <!-- Device Settings -->
+          <section class="panel editable-section" data-section="device">
+            <header class="panel-h"><span>Edit Device Settings</span></header>
+            <div class="panel-b grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="lbl" for="hostname">Hostname</label>
+                <input class="inp need-unlock" id="hostname" name="hostname" value="{{ defaults.hostname }}" />
+              </div>
+              <div>
+                <label class="lbl" for="temperature_unit">Temperature Unit</label>
+                <select class="inp need-unlock" id="temperature_unit" name="temperature_unit">
+                  <option value="1" {% if defaults.temperature_unit == 1 %}selected{% endif %}>Celsius</option>
+                  <option value="0" {% if defaults.temperature_unit == 0 %}selected{% endif %}>Fahrenheit</option>
+                </select>
+              </div>
+              <div>
+                <label class="lbl" for="mode">Operating Mode</label>
+                <select class="inp need-unlock" id="mode" name="mode">
+                  <option value="0" {% if defaults.mode == 0 %}selected{% endif %}>Inference</option>
+                  <option value="1" {% if defaults.mode == 1 %}selected{% endif %}>Training</option>
+                </select>
+              </div>
+              <div>
+                <label class="lbl" for="pressure_unit">Pressure Unit</label>
+                <select class="inp need-unlock" id="pressure_unit" name="pressure_unit">
+                  <option value="0" {% if defaults.pressure_code == 0 %}selected{% endif %}>Psig</option>
+                  <option value="1" {% if defaults.pressure_code == 1 %}selected{% endif %}>Pascal</option>
+                  <option value="2" {% if defaults.pressure_code == 2 %}selected{% endif %}>KPa</option>
+                  <option value="3" {% if defaults.pressure_code == 3 %}selected{% endif %}>MPa</option>
+                  <option value="4" {% if defaults.pressure_code == 4 %}selected{% endif %}>Bar</option>
+                </select>
+              </div>
+	      <div>
+		  <label class="lbl" for="instrument_name">Instrument Name</label>
+  		  <input type="text" class="inp need-unlock" id="instrument_name" name="instrument_name" 
+		           value="{{ defaults.instrument_name }}" disabled>
+	     </div>
+	     <div>
+  	  	  <label class="lbl" for="instrument_ip">Instrument IP</label>
+  		  <input type="text" class="inp need-unlock" id="instrument_ip" name="instrument_ip" 
+         	  	  value="{{ defaults.instrument_ip }}" disabled>
+	     </div>
+ 
+            </div>
+          </section>
+
+          <!-- Time -->
+          <section class="panel editable-section" data-section="time">
+            <header class="panel-h"><span>Edit Date/Time</span></header>
+            <div class="panel-b grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              <div>
+                <label class="lbl" for="time_source">Source</label>
+                <select class="inp need-unlock" id="time_source" name="time_source">
+                  <option value="ntp" {% if defaults.time_source == 'ntp' %}selected{% endif %}>NTP</option>
+                  <option value="manual" {% if defaults.time_source == 'manual' %}selected{% endif %}>Manual</option>
+                </select>
+              </div>
+              <div>
+                <label class="lbl" for="date">Date</label>
+                <input class="inp need-unlock" id="date" name="date" type="date" value="{{ defaults.date }}" />
+              </div>
+              <div>
+                <label class="lbl" for="time">Time</label>
+                <input class="inp need-unlock" id="time" name="time" type="time" value="{{ defaults.time }}" />
+              </div>
+            </div>
+          </section>
+
+          <!-- Network -->
+          <section class="panel editable-section" data-section="network">
+            <header class="panel-h"><span>Edit Network Settings</span></header>
+            <div class="panel-b grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="lbl" for="network_mode">Mode</label>
+                <select class="inp need-unlock" id="network_mode" name="network_mode">
+                  <option value="dhcp" {% if defaults.network_mode == 'dhcp' %}selected{% endif %}>DHCP</option>
+                  <option value="static" {% if defaults.network_mode == 'static' %}selected{% endif %}>Static</option>
+                </select>
+              </div>
+              <div>
+                <label class="lbl" for="ip">IP Address</label>
+                <input class="inp need-unlock" id="ip" name="ip" value="{{ defaults.ip }}" />
+              </div>
+              <div>
+                <label class="lbl" for="subnet">Subnet (CIDR)</label>
+                <input class="inp need-unlock" id="subnet" name="subnet" type="number" value="{{ defaults.subnet }}" placeholder="24" />
+              </div>
+              <div>
+                <label class="lbl" for="gateway">Gateway</label>
+                <input class="inp need-unlock" id="gateway" name="gateway" value="{{ defaults.gateway }}" />
+              </div>
+              <div class="md:col-span-2">
+                <label class="lbl" for="dns">DNS</label>
+                <input class="inp need-unlock" id="dns" name="dns" value="{{ defaults.dns }}" />
+              </div>
+            </div>
+          </section>
+
+          <div>
+            <button id="applyBtn" class="btn w-full" disabled>Apply Configuration</button>
+            <div id="msg" class="mt-3 text-sm"></div>
+            {% if not is_root %}
+            <div class="mt-2 text-xs text-yellow-300">Note: run the app as <code>root</code> to apply hostname/network/time.</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="content-remote" class="hidden">
+        <div id="wrap">
+            <h1>Live Metrics <span class="chip">SSE stream</span><span class="chip">History backfill</span></h1>
+            <div class="card">
+                <div id="toolbar">
+                    <div class="rangeCol">
+                        <div class="label" id="rangeLabel">Last 7 days</div>
+                        <input id="rangeDays" type="range" min="0" max="4" step="1" value="2" />
+                        <div class="ticks"><span>24h</span><span>3d</span><span>7d</span><span>14d</span><span>30d</span></div>
+                    </div>
+                    <button class="btn" id="reloadBtn">Reload</button>
+                    <button class="btn" id="dlRangeBtn">Download CSV (range)</button>
+                    <button class="btn" id="dlAllBtn">Download CSV (all)</button>
+                </div>
+                <div class="footer">CSV: <code>date,time,original_dl,predicted_dl,temperature,pressure</code></div>
+            </div>
+
+            <!-- Top chart -->
+            <div class="card">
+                <div class="chartWrap">
+                    <canvas id="chartTop"></canvas>
+                    <div id="tt" class="tt" style="display:none"></div>
+                    <div id="tt2" class="tt2" style="display:none"></div>
+                </div>
+                <div class="legend"><span>Top: Temperature (0–80 °C, left) vs Pressure (12–14, right).</span></div>
+            </div>
+
+            <!-- Bottom chart + tools -->
+            <div class="card">
+                <div id="dlTools">
+                    <span class="label">DL Y-axis:</span>
+                    <label class="label">Min <input id="dlMin" type="number" step="0.1" value="-200"></label>
+                    <label class="label">Max <input id="dlMax" type="number" step="0.1" value="200"></label>
+                    <button class="btn" id="applyRangeBtn">Apply</button>
+                    <button class="btn" id="resetZoomBtn">Reset Zoom</button>
+                    <span class="label" style="margin-left:14px">Training Band (°C):</span>
+                    <label class="label">Min <input id="bandMin" type="number" step="0.1" value="45"></label>
+                    <label class="label">Max <input id="bandMax" type="number" step="0.1" value="47"></label>
+                    <button class="btn" id="applyBandBtn">Apply Band</button>
+                    <span class="label">Tip: wheel/pinch/drag to zoom DL axis</span>
+                </div>
+
+                <div class="chartWrap small">
+                    <canvas id="chartBottom"></canvas>
+                    <div id="ttB" class="ttB" style="display:none"></div>
+                    <div id="tt2B" class="tt2B" style="display:none"></div>
+                </div>
+                <div class="legend"><span>Bottom: DL values (−200…200, left). Temp axis (15–65 °C, right) with adjustable band.</span></div>
+            </div>
+        </div>
+    </div>
+  <!-- Unlock modal -->
+  <div id="unlockModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-title">Unlock to Edit</div>
+      <input id="pwdInput" type="password" class="inp w-full" placeholder="Enter password" />
+      <div class="flex justify-end gap-2 mt-3">
+        <button id="cancelUnlock" class="btn px-3 py-1.5 rounded-lg">Cancel</button>
+        <button id="confirmUnlock" class="btn px-3 py-1.5 rounded-lg">Unlock</button>
+      </div>
+      <div id="unlockErr" class="text-sm mt-2 text-red-300"></div>
+    </div>
+  </div>
+
+  <script>
+    const tabs = {
+    'tab-system': 'content-system',
+    'tab-remote': 'content-remote'
+    };
+
+    for (const tabId in tabs) {
+      document.getElementById(tabId).addEventListener('click', () => {
+        for (const otherTabId in tabs) {
+          const contentId = tabs[otherTabId];
+          const tabEl = document.getElementById(otherTabId);
+          const contentEl = document.getElementById(contentId);
+          if (otherTabId === tabId) {
+            tabEl.classList.add('border-blue-500');
+            tabEl.classList.remove('border-transparent');
+            contentEl.classList.remove('hidden');
+          } else {
+            tabEl.classList.remove('border-blue-500');
+            tabEl.classList.add('border-transparent');
+            contentEl.classList.add('hidden');
+          }
+        }
+      });
+    }
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.umd.min.js"></script>
+  <script>
+    // IMPORTANT: register the plugin with Chart.js
+    const zoomPlugin = window['chartjs-plugin-zoom'];
+    if (zoomPlugin) {
+      Chart.register(zoomPlugin);
+    }
+  </script>
+
+  <script>
+    /* ---------- Utilities ---------- */
+    const DAY_CHOICES = [1, 3, 7, 14, 30];
+    const rangeEl = document.getElementById("rangeDays");
+    const rangeLabelEl = document.getElementById("rangeLabel");
+    function idxToDays(i) { i = Number(i); return DAY_CHOICES[Math.max(0, Math.min(DAY_CHOICES.length - 1, i))]; }
+    function labelForDays(d) { return d === 1 ? "Last 24 hours" : `Last ${d} days`; }
+    function syncRangeLabel() { rangeLabelEl.textContent = labelForDays(idxToDays(rangeEl.value)); }
+    rangeEl.addEventListener("input", syncRangeLabel);
+
+    /* Robust CSV parsing */
+    function parseCSVLine(l) {
+      if (!l) return null;
+      const parts = l.split(",");
+      if (parts.length < 6) return null;
+      const ts = (parts[0].trim() + " " + parts[1].trim()).replace(" ", "T");
+      const t = new Date(ts);
+      const oDL = Number(parts[2]); const pDL = Number(parts[3]);
+      const temp = Number(parts[4]); const pres = Number(parts[5]);
+      if (!(t instanceof Date) || isNaN(+t) || !isFinite(temp) || !isFinite(pres)) return null;
+      return { t, temp, pressure: pres, oDL, pDL };
+    }
+
+    /* ---------- Charts ---------- */
+    const points = [];
+
+    const topCtx = document.getElementById("chartTop").getContext("2d");
+    const chartTop = new Chart(topCtx, {
+      type: "line",
+      data: {
+        datasets: [{
+          label: "Temperature (°C)",
+          yAxisID: "yTemp",
+          data: [],
+          tension: .25,
+          borderWidth: 2,
+          pointRadius: 0,
+          borderColor: "#58a6ff",
+          backgroundColor: "rgba(88,166,255,0.25)"
+        }, {
+          label: "Pressure (bar)",
+          yAxisID: "yPress",
+          data: [],
+          tension: .25,
+          borderWidth: 2,
+          pointRadius: 0,
+          borderColor: "#ff6b6b",
+          backgroundColor: "rgba(255,107,107,0.25)"
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: { mode: "index", intersect: false },
+        scales: {
+          x: { type: "time", time: { tooltipFormat: "yyyy-MM-dd HH:mm:ss.SSS" }, ticks: { color: "#8b949e" }, grid: { color: "rgba(255,255,255,0.06)" } },
+          yTemp: { position: "left", min: 0, max: 80, ticks: { color: "#8b949e" }, grid: { color: "rgba(255,255,255,0.06)" } },
+          yPress: { position: "right", min: 12, max: 14, ticks: { color: "#8b949e" }, grid: { drawOnChartArea: false } }
+        },
+        plugins: { legend: { labels: { color: "#e6edf3", usePointStyle: true, boxWidth: 10 } } }
+      }
+    });
+
+    const tempBandPlugin = {
+      id: "tempBand",
+      beforeDatasetsDraw(c) {
+        const s = c.scales.yTemp2;
+        if (!s) return;
+        const b = c.$band || { min: 45, max: 47 };
+        if (!(b.max > b.min)) return;
+        const y1 = s.getPixelForValue(b.min),
+          y2 = s.getPixelForValue(b.max);
+        const { ctx, chartArea: { left, right } } = c;
+        const top = Math.min(y1, y2),
+          h = Math.abs(y2 - y1);
+        ctx.save();
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--band') || "rgba(255,214,102,.18)";
+        ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--band-outline') || "rgba(255,214,102,.6)";
+        ctx.fillRect(left, top, right - left, h);
+        ctx.strokeRect(left, top, right - left, h);
+        ctx.restore();
+      }
+    };
+
+    const bottomCtx = document.getElementById("chartBottom").getContext("2d");
+    const chartBottom = new Chart(bottomCtx, {
+      type: "line",
+      data: {
+        datasets: [{
+          label: "Original DL",
+          yAxisID: "yDL",
+          data: [],
+          tension: .25,
+          borderWidth: 2,
+          pointRadius: 0,
+          borderColor: "#3fb950",
+          backgroundColor: "rgba(63,185,80,0.25)"
+        }, {
+          label: "Predicted DL",
+          yAxisID: "yDL",
+          data: [],
+          tension: .25,
+          borderWidth: 2,
+          pointRadius: 0,
+          borderColor: "#ffa657",
+          backgroundColor: "rgba(255,166,87,0.25)"
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: { mode: "index", intersect: false },
+        scales: {
+          x: { type: "time", time: { tooltipFormat: "yyyy-MM-dd HH:mm:ss.SSS" }, ticks: { color: "#8b949e" }, grid: { color: "rgba(255,255,255,0.06)" } },
+          yDL: { position: "left", min: -200, max: 200, title: { display: true, text: "DL (−200 … +200)" }, ticks: { color: "#8b949e" }, grid: { color: "rgba(255,255,255,0.06)" } },
+          yTemp2: { position: "right", min: 15, max: 65, title: { display: true, text: "Temperature (°C)" }, ticks: { color: "#8b949e" }, grid: { drawOnChartArea: false } }
+        },
+        plugins: {
+          legend: { labels: { color: "#e6edf3", usePointStyle: true, boxWidth: 10 } },
+          zoom: {
+            limits: { y: { min: -200, max: 200 } },
+            pan: { enabled: true, mode: "y" },
+            zoom: { wheel: { enabled: true }, pinch: { enabled: true }, drag: { enabled: true, modifierKey: "shift" }, mode: "y" }
+          }
+        }
+      },
+      plugins: [tempBandPlugin]
+    });
+    chartBottom.$band = { min: 45, max: 47 };
+
+    /* Add point to both charts */
+    function addPoint(p) {
+      points.push(p);
+      chartTop.data.datasets[0].data.push({ x: p.t, y: p.temp });
+      chartTop.data.datasets[1].data.push({ x: p.t, y: p.pressure });
+      chartBottom.data.datasets[0].data.push({ x: p.t, y: p.oDL });
+      chartBottom.data.datasets[1].data.push({ x: p.t, y: p.pDL });
+    }
+
+    /* ---------- History backfill then SSE ---------- */
+    let currentDays = 7;
+    async function loadHistory(days) {
+      try {
+        const res = await fetch(`/history?days=${days}`, { cache: "no-store" });
+        if (!res.ok) return;
+        const text = await res.text();
+        const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+        for (const l of lines) {
+          const p = parseCSVLine(l);
+          if (p) addPoint(p);
+        }
+        chartTop.update("none");
+        chartBottom.update("none");
+      } catch (e) {
+        console.warn("history load failed:", e);
+      }
+    }
+
+    function startSSE() {
+      const es = new EventSource("/stream");
+      es.onmessage = (ev) => {
+        const raw = (ev.data || "").trim();
+        if (!raw) return;
+        const lines = raw.includes("\n") ? raw.split(/\r?\n/) : [raw];
+        for (const l of lines) {
+          const p = parseCSVLine(l.trim());
+          if (p) {
+            addPoint(p);
+          }
+        }
+        chartTop.update("none");
+        chartBottom.update("none");
+      };
+      es.onerror = (e) => console.warn("SSE error/disconnected; browser will retry.", e);
+    }
+
+    /* ---------- Controls ---------- */
+    const reloadBtn = document.getElementById("reloadBtn");
+    const dlRangeBtn = document.getElementById("dlRangeBtn");
+    const dlAllBtn = document.getElementById("dlAllBtn");
+    const dlMinEl = document.getElementById("dlMin");
+    const dlMaxEl = document.getElementById("dlMax");
+    const bandMinEl = document.getElementById("bandMin");
+    const bandMaxEl = document.getElementById("bandMax");
+    const applyRange = document.getElementById("applyRangeBtn");
+    const resetZoom = document.getElementById("resetZoomBtn");
+    const applyBand = document.getElementById("applyBandBtn");
+
+    reloadBtn.addEventListener("click", async () => {
+      currentDays = idxToDays(rangeEl.value);
+      // clear datasets
+      chartTop.data.datasets.forEach(ds => ds.data.length = 0);
+      chartBottom.data.datasets.forEach(ds => ds.data.length = 0);
+      await loadHistory(currentDays);
+    });
+    dlRangeBtn.addEventListener("click", () => {
+      const d = idxToDays(rangeEl.value);
+      window.location.href = `/download-range?days=${d}`;
+    });
+    dlAllBtn.addEventListener("click", () => {
+      window.location.href = `/download`;
+    });
+
+    applyRange.addEventListener("click", () => {
+      let mn = parseFloat(dlMinEl.value),
+        mx = parseFloat(dlMaxEl.value);
+      if (!isFinite(mn) || !isFinite(mx) || mn >= mx) return;
+      mn = Math.max(-200, mn);
+      mx = Math.min(200, mx);
+      chartBottom.options.scales.yDL.min = mn;
+      chartBottom.options.scales.yDL.max = mx;
+      chartBottom.update("none");
+    });
+
+    document.getElementById("resetZoomBtn").onclick = () => {
+      if (typeof chartBottom.resetZoom === "function") {
+        chartBottom.resetZoom();
+      }
+      chartBottom.options.scales.yDL.min = -200;
+      chartBottom.options.scales.yDL.max = 200;
+      dlMinEl.value = "-200";
+      dlMaxEl.value = "200";
+      chartBottom.update("none");
+    };
+
+    applyBand.addEventListener("click", () => {
+      let bmin = parseFloat(bandMinEl.value),
+        bmax = parseFloat(bandMaxEl.value);
+      if (!isFinite(bmin) || !isFinite(bmax) || bmax <= bmin) return;
+      bmin = Math.max(15, Math.min(65, bmin));
+      bmax = Math.max(15, Math.min(65, bmax));
+      if (bmax <= bmin) return;
+      chartBottom.$band = { min: bmin, max: bmax };
+      chartBottom.update("none");
+    });
+
+    /* ---------- Boot ---------- */
+    (async function init() {
+      syncRangeLabel();
+      await loadHistory(currentDays);
+      startSSE();
+    })();
+  </script>
+  <script src="/static/diagnostic.js"></script>
+  
+</body>
+</html>
