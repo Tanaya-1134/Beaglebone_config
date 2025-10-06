@@ -317,45 +317,39 @@
 
 <script>
     // --------------------------------------------------------------------------------
-    // 1. CHART RESIZE FIX AND DOM CONTENT WRAPPER
-    // Ensures all scripts run after the HTML elements are loaded and fixes the chart display.
+    // 1. TAB SWITCHING LOGIC (ONLY)
+    // This is the only logic required in the main page now.
     // --------------------------------------------------------------------------------
     document.addEventListener('DOMContentLoaded', () => {
 
-        // --- Tab Switching Logic (Original + Fix) ---
+        // --- Tab Switching Logic ---
         const tabs = {
+            // Note: Ensure the button IDs ('tab-system', 'tab-remote') match your HTML
             'tab-system': 'content-system',
             'tab-remote': 'content-remote'
         };
 
         for (const tabId in tabs) {
             const tabEl = document.getElementById(tabId);
-            if (!tabEl) continue; 
+            if (!tabEl) continue;
 
             tabEl.addEventListener('click', () => {
                 for (const otherTabId in tabs) {
                     const contentId = tabs[otherTabId];
                     const otherTabEl = document.getElementById(otherTabId);
                     const contentEl = document.getElementById(contentId);
-                    
+
                     if (!otherTabEl || !contentEl) continue;
 
                     if (otherTabId === tabId) {
-                        // Activate the clicked tab
+                        // Activate the clicked tab and show content
                         otherTabEl.classList.add('border-blue-500');
                         otherTabEl.classList.remove('border-transparent');
                         contentEl.classList.remove('hidden');
 
-                        // ⭐ CHART FIX: Resize and update charts when the graphical tab is opened
-                        if (tabId === 'tab-remote') {
-                            // These variables are created in the next script block, accessible globally
-                            if (window.chartTop && window.chartBottom) {
-                                window.chartTop.resize();
-                                window.chartBottom.resize();
-                                window.chartTop.update('none'); // Update without animation
-                                window.chartBottom.update('none'); 
-                            }
-                        }
+                        // IMPORTANT: The chart resizing logic has been REMOVED here
+                        // because the content is now inside an iframe.
+                        
                     } else {
                         // Deactivate and hide other tabs
                         otherTabEl.classList.remove('border-blue-500');
@@ -369,297 +363,15 @@
 
 
         // --------------------------------------------------------------------------------
-        // 2. BOOTSTRAP (RUNS AFTER ALL SETUP IS COMPLETE)
+        // 2. BOOTSTRAP (ONLY run scripts that belong to the MAIN page)
+        // Since all chart logic is removed, this entire block is also likely NOT needed
+        // unless you have other main-page setup logic.
+        // I recommend removing the bootstrap section completely.
         // --------------------------------------------------------------------------------
-        (async function init() {
-            // Note: Chart setup (chartTop/chartBottom creation) is in the next script block
-            // It will execute before this init function, but after DOMContentLoaded.
-            
-            // The utilities are already global, so call sync manually here
-            if (typeof syncRangeLabel === 'function') {
-                syncRangeLabel();
-            }
-
-            // Ensure loadHistory and startSSE are defined before calling
-            if (typeof loadHistory === 'function') {
-                await loadHistory(window.currentDays || 7);
-            }
-            if (typeof startSSE === 'function') {
-                startSSE();
-            }
+        /* (async function init() {
+            // All functions like syncRangeLabel, loadHistory, startSSE are now gone.
         })();
-    });
-</script>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.umd.min.js"></script>
-
-<script>
-    // IMPORTANT: register the plugin with Chart.js
-    const zoomPlugin = window['chartjs-plugin-zoom'];
-    if (zoomPlugin) {
-        Chart.register(zoomPlugin);
-    }
-</script>
-
-<script>
-    // --------------------------------------------------------------------------------
-    // 3. MAIN FUNCTIONALITY AND CHART DEFINITION (SLIGHTLY MODIFIED)
-    // Variables are defined here to be global (implicitly global or attached to window)
-    // --------------------------------------------------------------------------------
-    
-    /* ---------- Utilities ---------- */
-    const DAY_CHOICES = [1, 3, 7, 14, 30];
-    const rangeEl = document.getElementById("rangeDays");
-    const rangeLabelEl = document.getElementById("rangeLabel");
-    let currentDays = 7; // Define currentDays globally
-
-    // Ensure rangeEl and rangeLabelEl exist before proceeding (safety check)
-    if (rangeEl && rangeLabelEl) {
-        function idxToDays(i) { i = Number(i); return DAY_CHOICES[Math.max(0, Math.min(DAY_CHOICES.length - 1, i))]; }
-        function labelForDays(d) { return d === 1 ? "Last 24 hours" : `Last ${d} days`; }
-        window.syncRangeLabel = function() { rangeLabelEl.textContent = labelForDays(idxToDays(rangeEl.value)); } // Attach to window for external call
-        rangeEl.addEventListener("input", window.syncRangeLabel);
-    }
-
-    /* Robust CSV parsing */
-    function parseCSVLine(l) {
-        if (!l) return null;
-        const parts = l.split(",");
-        if (parts.length < 6) return null;
-        const ts = (parts[0].trim() + " " + parts[1].trim()).replace(" ", "T");
-        const t = new Date(ts);
-        const oDL = Number(parts[2]); const pDL = Number(parts[3]);
-        const temp = Number(parts[4]); const pres = Number(parts[5]);
-        if (!(t instanceof Date) || isNaN(+t) || !isFinite(temp) || !isFinite(pres)) return null;
-        return { t, temp, pressure: pres, oDL, pDL };
-    }
-
-    /* ---------- Charts ---------- */
-    const points = [];
-
-    const topCtx = document.getElementById("chartTop") ? document.getElementById("chartTop").getContext("2d") : null;
-    const bottomCtx = document.getElementById("chartBottom") ? document.getElementById("chartBottom").getContext("2d") : null;
-
-    // Use window. for explicit global scope to ensure access in the tab-switching logic
-    if (topCtx) {
-        window.chartTop = new Chart(topCtx, {
-            type: "line",
-            data: {
-                datasets: [{
-                    label: "Temperature (°C)",
-                    yAxisID: "yTemp",
-                    data: [],
-                    tension: .25,
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    borderColor: "#58a6ff",
-                    backgroundColor: "rgba(88,166,255,0.25)"
-                }, {
-                    label: "Pressure (bar)",
-                    yAxisID: "yPress",
-                    data: [],
-                    tension: .25,
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    borderColor: "#ff6b6b",
-                    backgroundColor: "rgba(255,107,107,0.25)"
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: false,
-                interaction: { mode: "index", intersect: false },
-                scales: {
-                    x: { type: "time", time: { tooltipFormat: "yyyy-MM-dd HH:mm:ss.SSS" }, ticks: { color: "#8b949e" }, grid: { color: "rgba(255,255,255,0.06)" } },
-                    yTemp: { position: "left", min: 0, max: 80, ticks: { color: "#8b949e" }, grid: { color: "rgba(255,255,255,0.06)" } },
-                    yPress: { position: "right", min: 12, max: 14, ticks: { color: "#8b949e" }, grid: { drawOnChartArea: false } }
-                },
-                plugins: { legend: { labels: { color: "#e6edf3", usePointStyle: true, boxWidth: 10 } } }
-            }
-        });
-    }
-
-
-    const tempBandPlugin = {
-        id: "tempBand",
-        beforeDatasetsDraw(c) {
-            const s = c.scales.yTemp2;
-            if (!s) return;
-            const b = c.$band || { min: 45, max: 47 };
-            if (!(b.max > b.min)) return;
-            const y1 = s.getPixelForValue(b.min),
-                y2 = s.getPixelForValue(b.max);
-            const { ctx, chartArea: { left, right } } = c;
-            const top = Math.min(y1, y2),
-                h = Math.abs(y2 - y1);
-            ctx.save();
-            ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--band') || "rgba(255,214,102,.18)";
-            ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--band-outline') || "rgba(255,214,102,.6)";
-            ctx.fillRect(left, top, right - left, h);
-            ctx.strokeRect(left, top, right - left, h);
-            ctx.restore();
-        }
-    };
-
-    if (bottomCtx) {
-        window.chartBottom = new Chart(bottomCtx, {
-            type: "line",
-            data: {
-                datasets: [{
-                    label: "Original DL",
-                    yAxisID: "yDL",
-                    data: [],
-                    tension: .25,
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    borderColor: "#3fb950",
-                    backgroundColor: "rgba(63,185,80,0.25)"
-                }, {
-                    label: "Predicted DL",
-                    yAxisID: "yDL",
-                    data: [],
-                    tension: .25,
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    borderColor: "#ffa657",
-                    backgroundColor: "rgba(255,166,87,0.25)"
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: false,
-                interaction: { mode: "index", intersect: false },
-                scales: {
-                    x: { type: "time", time: { tooltipFormat: "yyyy-MM-dd HH:mm:ss.SSS" }, ticks: { color: "#8b949e" }, grid: { color: "rgba(255,255,255,0.06)" } },
-                    yDL: { position: "left", min: -200, max: 200, title: { display: true, text: "DL (−200 … +200)" }, ticks: { color: "#8b949e" }, grid: { color: "rgba(255,255,255,0.06)" } },
-                    yTemp2: { position: "right", min: 15, max: 65, title: { display: true, text: "Temperature (°C)" }, ticks: { color: "#8b949e" }, grid: { drawOnChartArea: false } }
-                },
-                plugins: {
-                    legend: { labels: { color: "#e6edf3", usePointStyle: true, boxWidth: 10 } },
-                    zoom: {
-                        limits: { y: { min: -200, max: 200 } },
-                        pan: { enabled: true, mode: "y" },
-                        zoom: { wheel: { enabled: true }, pinch: { enabled: true }, drag: { enabled: true, modifierKey: "shift" }, mode: "y" }
-                    }
-                }
-            },
-            plugins: [tempBandPlugin]
-        });
-        window.chartBottom.$band = { min: 45, max: 47 };
-    }
-
-
-    /* Add point to both charts */
-    function addPoint(p) {
-        points.push(p);
-        if (window.chartTop) {
-            window.chartTop.data.datasets[0].data.push({ x: p.t, y: p.temp });
-            window.chartTop.data.datasets[1].data.push({ x: p.t, y: p.pressure });
-        }
-        if (window.chartBottom) {
-            window.chartBottom.data.datasets[0].data.push({ x: p.t, y: p.oDL });
-            window.chartBottom.data.datasets[1].data.push({ x: p.t, y: p.pDL });
-        }
-    }
-
-    /* ---------- History backfill then SSE ---------- */
-    async function loadHistory(days) {
-        try {
-            const res = await fetch(`/history?days=${days}`, { cache: "no-store" });
-            if (!res.ok) return;
-            const text = await res.text();
-            const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-            for (const l of lines) {
-                const p = parseCSVLine(l);
-                if (p) addPoint(p);
-            }
-            if (window.chartTop) window.chartTop.update("none");
-            if (window.chartBottom) window.chartBottom.update("none");
-        } catch (e) {
-            console.warn("history load failed:", e);
-        }
-    }
-
-    function startSSE() {
-        const es = new EventSource("/stream");
-        es.onmessage = (ev) => {
-            const raw = (ev.data || "").trim();
-            if (!raw) return;
-            const lines = raw.includes("\n") ? raw.split(/\r?\n/) : [raw];
-            for (const l of lines) {
-                const p = parseCSVLine(l.trim());
-                if (p) {
-                    addPoint(p);
-                }
-            }
-            if (window.chartTop) window.chartTop.update("none");
-            if (window.chartBottom) window.chartBottom.update("none");
-        };
-        es.onerror = (e) => console.warn("SSE error/disconnected; browser will retry.", e);
-    }
-
-    /* ---------- Controls ---------- */
-    const reloadBtn = document.getElementById("reloadBtn");
-    const dlRangeBtn = document.getElementById("dlRangeBtn");
-    const dlAllBtn = document.getElementById("dlAllBtn");
-    const dlMinEl = document.getElementById("dlMin");
-    const dlMaxEl = document.getElementById("dlMax");
-    const bandMinEl = document.getElementById("bandMin");
-    const bandMaxEl = document.getElementById("bandMax");
-    const applyRange = document.getElementById("applyRangeBtn");
-    const resetZoom = document.getElementById("resetZoomBtn");
-    const applyBand = document.getElementById("applyBandBtn");
-
-    if (reloadBtn) reloadBtn.addEventListener("click", async () => {
-        currentDays = idxToDays(rangeEl.value);
-        // clear datasets
-        if (window.chartTop) window.chartTop.data.datasets.forEach(ds => ds.data.length = 0);
-        if (window.chartBottom) window.chartBottom.data.datasets.forEach(ds => ds.data.length = 0);
-        await loadHistory(currentDays);
-    });
-    if (dlRangeBtn) dlRangeBtn.addEventListener("click", () => {
-        const d = idxToDays(rangeEl.value);
-        window.location.href = `/download-range?days=${d}`;
-    });
-    if (dlAllBtn) dlAllBtn.addEventListener("click", () => {
-        window.location.href = `/download`;
-    });
-
-    if (applyRange && dlMinEl && dlMaxEl && window.chartBottom) applyRange.addEventListener("click", () => {
-        let mn = parseFloat(dlMinEl.value),
-            mx = parseFloat(dlMaxEl.value);
-        if (!isFinite(mn) || !isFinite(mx) || mn >= mx) return;
-        mn = Math.max(-200, mn);
-        mx = Math.min(200, mx);
-        window.chartBottom.options.scales.yDL.min = mn;
-        window.chartBottom.options.scales.yDL.max = mx;
-        window.chartBottom.update("none");
-    });
-
-    if (resetZoom && dlMinEl && dlMaxEl && window.chartBottom) document.getElementById("resetZoomBtn").onclick = () => {
-        if (typeof window.chartBottom.resetZoom === "function") {
-            window.chartBottom.resetZoom();
-        }
-        window.chartBottom.options.scales.yDL.min = -200;
-        window.chartBottom.options.scales.yDL.max = 200;
-        dlMinEl.value = "-200";
-        dlMaxEl.value = "200";
-        window.chartBottom.update("none");
-    };
-
-    if (applyBand && bandMinEl && bandMaxEl && window.chartBottom) applyBand.addEventListener("click", () => {
-        let bmin = parseFloat(bandMinEl.value),
-            bmax = parseFloat(bandMaxEl.value);
-        if (!isFinite(bmin) || !isFinite(bmax) || bmax <= bmin) return;
-        bmin = Math.max(15, Math.min(65, bmin));
-        bmax = Math.max(15, Math.min(65, bmax));
-        if (bmax <= bmin) return;
-        window.chartBottom.$band = { min: bmin, max: bmax };
-        window.chartBottom.update("none");
+        */
     });
 </script>
 
