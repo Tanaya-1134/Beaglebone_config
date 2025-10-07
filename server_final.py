@@ -23,6 +23,13 @@ AUTH_TOKEN = os.getenv("AUTH_TOKEN", "bbbdatamonitor")
 clients: Set[asyncio.Queue[str]] = set()
 broadcast_lock = asyncio.Lock()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8000"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 async def broadcast(line: str):
     async with broadcast_lock:
         dead = []
