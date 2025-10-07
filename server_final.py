@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse, PlainTextResponse, FileResponse
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
 
 # ---- Persistent storage config ----
 DATA_DIR = os.getenv("DATA_DIR", "./data")
